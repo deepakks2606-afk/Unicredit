@@ -1,24 +1,20 @@
 pipeline {
     agent any
-
     tools {
         maven 'Maven 3'   // Configure this name in Jenkins > Global Tool Configuration
         jdk 'JDK 21'      // Configure this name in Jenkins > Global Tool Configuration
     }
-
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
-
         stage('Build') {
             steps {
                 bat 'mvn -B clean compile'   // use 'sh' instead of 'bat' if agent is Linux
             }
         }
-
         stage('Test') {
             steps {
                 bat 'mvn -B test'
@@ -29,19 +25,21 @@ pipeline {
                 }
             }
         }
-
         stage('Package WAR') {
             steps {
                 bat 'mvn -B package -DskipTests'
             }
         }
-
         stage('Archive') {
             steps {
                 archiveArtifacts artifacts: 'target/*.war', fingerprint: true
             }
         }
-
+        stage('Upload to JFrog') {
+            steps {
+                jf 'rt upload target/sample-war-app.war war-releases-local/com/example/sample-war-app/%BUILD_NUMBER%/ --server-id=jfrog-server'
+            }
+        }
         // Optional: deploy to a Tomcat server. Requires the
         // "Deploy to container" Jenkins plugin and a configured Tomcat manager user.
         // stage('Deploy') {
@@ -51,33 +49,12 @@ pipeline {
         //     }
         // }
     }
-
     post {
         success {
             echo 'WAR build succeeded!'
         }
         failure {
             echo 'Build failed — check the logs above.'
-        }
-    }
-}
-
-stage('Upload to JFrog') {
-    steps {
-        script {
-            def server = Artifactory.newServer instantiationId: 'jfrog-server'
-
-            def uploadSpec = """{
-                "files": [
-                    {
-                        "pattern": "target/sample-war-app.war",
-                        "target": "war-releases-local/com/example/sample-war-app/${env.BUILD_NUMBER}/"
-                    }
-                ]
-            }"""
-
-            def buildInfo = server.upload(uploadSpec)
-            server.publishBuildInfo buildInfo
         }
     }
 }
