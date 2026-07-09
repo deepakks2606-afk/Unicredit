@@ -1,21 +1,30 @@
 pipeline {
     agent any
+
     tools {
         maven 'Maven 3'   // Configure this name in Jenkins > Global Tool Configuration
         jdk 'JDK 21'      // Configure this name in Jenkins > Global Tool Configuration
-        jfrog 'jfrog-cli'
     }
+
+    environment {
+        DOCKER_REGISTRY   = 'trialgv5wrb.jfrog.io'
+        DOCKER_REPO       = 'docker-local'
+        IMAGE_NAME        = 'sample-war-app'
+    }
+
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
+
         stage('Build') {
             steps {
                 bat 'mvn -B clean compile'   // use 'sh' instead of 'bat' if agent is Linux
             }
         }
+
         stage('Test') {
             steps {
                 bat 'mvn -B test'
@@ -26,36 +35,40 @@ pipeline {
                 }
             }
         }
-        stage('Package WAR') {
+
+        stage('Package WAR (internal only)') {
             steps {
                 bat 'mvn -B package -DskipTests'
             }
         }
-        stage('Archive') {
+
+        stage('Docker Build') {
             steps {
-                archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+                bat "docker build -t %DOCKER_REGISTRY%/%DOCKER_REPO%/%IMAGE_NAME%:%BUILD_NUMBER% ."
+                bat "docker tag %DOCKER_REGISTRY%/%DOCKER_REPO%/%IMAGE_NAME%:%BUILD_NUMBER% %DOCKER_REGISTRY%/%DOCKER_REPO%/%IMAGE_NAME%:latest"
             }
         }
-        stage('Upload to JFrog') {
+
+        stage('Docker Login & Push') {
             steps {
-                jf 'rt upload target/sample-war-app.war war-releases-local/com/example/sample-war-app/%BUILD_NUMBER%/ --server-id=jfrog-server'
+                withCredentials([usernamePassword(credentialsId: 'jfrog-creds', usernameVariable: 'JFROG_USER', passwordVariable: 'JFROG_PASS')]) {
+                    bat "docker login %DOCKER_REGISTRY% -u %JFROG_USER% -p %JFROG_PASS%"
+                    bat "docker push %DOCKER_REGISTRY%/%DOCKER_REPO%/%IMAGE_NAME%:%BUILD_NUMBER%"
+                    bat "docker push %DOCKER_REGISTRY%/%DOCKER_REPO%/%IMAGE_NAME%:latest"
+                }
             }
         }
-        // Optional: deploy to a Tomcat server. Requires the
-        // "Deploy to container" Jenkins plugin and a configured Tomcat manager user.
-        // stage('Deploy') {
-        //     steps {
-        //         deploy adapters: [tomcat9(credentialsId: 'tomcat-creds', url: 'http://localhost:8081')],
-        //                war: 'target/*.war'
-        //     }
-        // }
     }
+
     post {
         success {
-            echo 'WAR build succeeded!'
+            echo 'Docker image built and pushed to JFrog successfully!'
         }
         failure {
             echo 'Build failed — check the logs above.'
+        }
+        always {
+            bat "docker logout %DOCKER_REGISTRY%"
         }
     }
 }
