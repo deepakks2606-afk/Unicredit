@@ -3,6 +3,7 @@ pipeline {
     tools {
         maven 'Maven 3'   // Configure this name in Jenkins > Global Tool Configuration
         jdk 'JDK 21'      // Configure this name in Jenkins > Global Tool Configuration
+        jfrog 'jfrog-cli'
     }
     stages {
         stage('Checkout') {
