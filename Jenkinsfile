@@ -61,3 +61,23 @@ pipeline {
         }
     }
 }
+
+stage('Upload to JFrog') {
+    steps {
+        script {
+            def server = Artifactory.newServer instantiationId: 'jfrog-server'
+
+            def uploadSpec = """{
+                "files": [
+                    {
+                        "pattern": "target/sample-war-app.war",
+                        "target": "war-releases-local/com/example/sample-war-app/${env.BUILD_NUMBER}/"
+                    }
+                ]
+            }"""
+
+            def buildInfo = server.upload(uploadSpec)
+            server.publishBuildInfo buildInfo
+        }
+    }
+}
