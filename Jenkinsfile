@@ -10,6 +10,8 @@ pipeline {
         DOCKER_REGISTRY   = 'trialgv5wrb.jfrog.io'
         DOCKER_REPO       = 'docker-local'
         IMAGE_NAME        = 'sample-war-app'
+        GCP_VM_USER       = 'deepakks2606'
+        GCP_VM_IP         = '136.109.254.31'
     }
 
     stages {
@@ -58,11 +60,28 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy to GCP') {
+            steps {
+                sshagent(credentials: ['gcp-vm-ssh']) {
+                    withCredentials([usernamePassword(credentialsId: 'jfrog-creds', usernameVariable: 'JFROG_USER', passwordVariable: 'JFROG_PASS')]) {
+                        bat """
+                            ssh -o StrictHostKeyChecking=no %GCP_VM_USER%@%GCP_VM_IP% ^
+                            "sudo docker login %DOCKER_REGISTRY% -u %JFROG_USER% -p %JFROG_PASS% && ^
+                            sudo docker pull %DOCKER_REGISTRY%/%DOCKER_REPO%/%IMAGE_NAME%:latest && ^
+                            (sudo docker stop %IMAGE_NAME% || true) && ^
+                            (sudo docker rm %IMAGE_NAME% || true) && ^
+                            sudo docker run -d -p 80:8080 --name %IMAGE_NAME% %DOCKER_REGISTRY%/%DOCKER_REPO%/%IMAGE_NAME%:latest"
+                        """
+                    }
+                }
+            }
+        }
     }
 
     post {
         success {
-            echo 'Docker image built and pushed to JFrog successfully!'
+            echo 'Full pipeline succeeded: build, test, package, containerize, push, and deploy to GCP!'
         }
         failure {
             echo 'Build failed — check the logs above.'
