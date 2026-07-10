@@ -69,7 +69,8 @@ pipeline {
                 ]) {
                     bat """
                         icacls "%SSH_KEY%" /inheritance:r
-                        icacls "%SSH_KEY%" /grant:r "%USERNAME%":R
+                        icacls "%SSH_KEY%" /grant:r "SYSTEM":R
+                        icacls "%SSH_KEY%" /grant:r "Administrators":R
                     """
                     bat "ssh -i \"%SSH_KEY%\" -o StrictHostKeyChecking=no %SSH_USER%@%GCP_VM_IP% \"sudo docker login %DOCKER_REGISTRY% -u %JFROG_USER% -p %JFROG_PASS% ; sudo docker pull %DOCKER_REGISTRY%/%DOCKER_REPO%/%IMAGE_NAME%:latest ; sudo docker stop %IMAGE_NAME% ; sudo docker rm %IMAGE_NAME% ; sudo docker run -d -p 80:8080 --name %IMAGE_NAME% %DOCKER_REGISTRY%/%DOCKER_REPO%/%IMAGE_NAME%:latest\""
                 }
